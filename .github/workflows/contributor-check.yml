@@ -11,6 +11,8 @@ jobs:
       - name: Checkout Action
         uses: actions/checkout@v6
         with:
+          repository: debezium/debezium
+          ref: main
           fetch-depth: 0
       - name: Check if COPYRIGHT.txt has author name?
         id: check
