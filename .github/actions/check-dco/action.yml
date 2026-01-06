@@ -31,7 +31,7 @@ runs:
             repo: context.repo.repo,
           });
           for (const comment of comments.data) {
-            if (comment.body.includes ('(DCO) check failed.')) {
+            if (comment.body.includes ('(DCO) check failed.') && comment.user.login === 'github-actions[bot]') {
               await github.rest.issues.deleteComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
