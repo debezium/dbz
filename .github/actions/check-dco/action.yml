@@ -11,7 +11,7 @@ runs:
   using: "composite"
   steps:
     - name: Check sign-off
-      uses: KineticCafe/actions-dco@v2
+      uses: KineticCafe/actions-dco@v2.1.1
 
     - name: Commit if DCO failed
       if: failure() && inputs.add-comments == 'true'
