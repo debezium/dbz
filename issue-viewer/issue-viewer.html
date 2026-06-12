@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Issue Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #f6f8fa;
+        }
+
+        .config-panel {
+            background: #24292e;
+            color: #fff;
+            padding: 15px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .config-panel.collapsed {
+            padding: 10px 20px;
+        }
+
+        .config-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .config-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 5px;
+        }
+
+        .config-content {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .config-panel.collapsed .config-content {
+            display: none;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #c9d1d9;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 8px 12px;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            background: #0d1117;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #238636;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #2ea043;
+        }
+
+        .btn-primary:disabled {
+            background: #21262d;
+            color: #8b949e;
+            cursor: not-allowed;
+        }
+
+        .status-bar {
+            padding: 8px 20px;
+            background: #161b22;
+            color: #8b949e;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-message {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #f85149;
+        }
+
+        .success {
+            color: #3fb950;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .issue-list {
+            width: 350px;
+            background: #fff;
+            border-right: 1px solid #d0d7de;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .issue-list-header {
+            padding: 15px;
+            border-bottom: 1px solid #d0d7de;
+            background: #f6f8fa;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .issue-item {
+            padding: 15px;
+            border-bottom: 1px solid #d0d7de;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .issue-item:hover {
+            background: #f6f8fa;
+        }
+
+        .issue-item.selected {
+            background: #ddf4ff;
+            border-left: 3px solid #0969da;
+        }
+
+        .issue-number {
+            font-size: 12px;
+            color: #57606a;
+            font-weight: 600;
+        }
+
+        .issue-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 5px 0;
+            color: #24292f;
+        }
+
+        .issue-meta {
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+            color: #57606a;
+            margin-top: 5px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-open {
+            background: #dafbe1;
+            color: #1a7f37;
+        }
+
+        .badge-closed {
+            background: #f1e5ff;
+            color: #8250df;
+        }
+
+        .label {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+
+        .issue-details {
+            flex: 1;
+            overflow-y: auto;
+            background: #fff;
+            padding: 30px;
+        }
+
+        .issue-details-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #57606a;
+            font-size: 14px;
+        }
+
+        .issue-header {
+            margin-bottom: 20px;
+        }
+
+        .issue-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #24292f;
+        }
+
+        .issue-header-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            color: #57606a;
+            flex-wrap: wrap;
+        }
+
+        .issue-body {
+            padding: 20px;
+            background: #f6f8fa;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .comments-section {
+            margin-top: 30px;
+        }
+
+        .comments-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #24292f;
+        }
+
+        .comment {
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .comment-header {
+            background: #f6f8fa;
+            padding: 10px 15px;
+            border-bottom: 1px solid #d0d7de;
+            font-size: 13px;
+            color: #57606a;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: #24292f;
+        }
+
+        .comment-body {
+            padding: 15px;
+            line-height: 1.6;
+        }
+
+        .comment.recent {
+            border-color: #0969da;
+            background: #ddf4ff;
+        }
+
+        .comment.recent .comment-header {
+            background: #b6e3ff;
+        }
+
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 16px;
+            background: #24292e;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .github-link:hover {
+            background: #32383f;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #57606a;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            font-size: 13px;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.2s;
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: #fff;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.2s;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #d0d7de;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #57606a;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            color: #24292f;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-section {
+            margin-bottom: 25px;
+        }
+
+        .modal-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .modal-section h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #24292f;
+        }
+
+        .label-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .label-option {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .label-option:hover {
+            opacity: 0.8;
+        }
+
+        .label-option.selected {
+            border-color: #0969da;
+            box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.2);
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: #0969da;
+        }
+
+        .modal-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #fff;
+            margin-bottom: 10px;
+        }
+
+        .modal-select:focus {
+            outline: none;
+            border-color: #0969da;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #d0d7de;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-secondary {
+            background: #f6f8fa;
+            color: #24292f;
+            border: 1px solid #d0d7de;
+        }
+
+        .btn-secondary:hover {
+            background: #f3f4f6;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #57606a;
+            margin-top: 5px;
+        }
+
+        .btn-edit {
+            background: #0969da;
+            color: #fff;
+            margin-left: 10px;
+        }
+
+        .btn-edit:hover {
+            background: #0860ca;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+
+            .issue-list {
+                width: 100%;
+                max-height: 40vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="config-panel" id="configPanel">
+        <div class="config-header" onclick="toggleConfig()">
+            <h1>🔍 GitHub Issue Viewer</h1>
+            <button class="toggle-btn" id="toggleBtn">▼</button>
+        </div>
+        <div class="config-content">
+            <div class="form-group">
+                <label for="repository">Repository (owner/repo)</label>
+                <input type="text" id="repository" placeholder="debezium/debezium" value="debezium/dbz" />
+            </div>
+            <div class="form-group">
+                <label for="token">GitHub Token (optional)</label>
+                <input type="password" id="token" placeholder="ghp_..." />
+            </div>
+            <div class="form-group">
+                <label for="days">Days Lookback</label>
+                <input type="number" id="days" value="4" min="1" max="30" />
+            </div>
+            <div class="form-group">
+                <label for="state">Issue State</label>
+                <select id="state" class="form-control">
+                    <option value="open" selected>Open</option>
+                    <option value="closed">Closed</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="projectSelect">Project</label>
+                <select id="projectSelect" class="form-control">
+                    <option value="">Loading projects...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" id="fetchBtn" onclick="fetchIssues()">Fetch Issues</button>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="saveConfig" checked />
+                <label for="saveConfig">Save configuration</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-message" id="statusMessage">
+            Ready to fetch issues
+        </div>
+        <div id="rateLimit"></div>
+    </div>
+
+    <div class="main-content">
+        <div class="issue-list">
+            <div class="issue-list-header" id="issueListHeader">
+                Issues
+            </div>
+            <div id="issueListContent">
+                <div class="empty-state">
+                    <h3>No issues loaded</h3>
+                    <p>Configure and fetch issues to get started</p>
+                </div>
+            </div>
+        </div>
+        <div class="issue-details">
+            <div class="issue-details-empty" id="issueDetailsContent">
+                Select an issue to view details
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Issue</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h4>Labels</h4>
+                    <div id="labelSelector" class="label-selector">
+                        <div style="color: #57606a; font-size: 13px;">Loading labels...</div>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <h4>Project Fields</h4>
+                    <div id="projectFieldsContainer" style="display: none;">
+                        <div style="color: #57606a; font-size: 13px; margin-bottom: 15px;">Loading project fields...</div>
+                        <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px;">Iteration</label>
+                        <select id="iterationSelect" class="modal-select">
+                            <option value="">-- No change --</option>
+                        </select>
+                        
+                        <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px; margin-top: 15px;">Stable Iteration</label>
+                        <select id="stableIterationSelect" class="modal-select">
+                            <option value="">-- No change --</option>
+                        </select>
+                        
+                        <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px; margin-top: 15px;">Product Iteration</label>
+                        <select id="productIterationSelect" class="modal-select">
+                            <option value="">-- No change --</option>
+                        </select>
+                        
+                        <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px; margin-top: 15px;">Status</label>
+                        <select id="statusSelect" class="modal-select">
+                            <option value="">-- No change --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <h4>Add Comment</h4>
+                    <textarea id="commentText" class="modal-input" rows="4" placeholder="Write a comment..." style="resize: vertical; font-family: inherit;"></textarea>
+                    <div class="help-text">Leave empty to skip adding a comment</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveIssueChanges()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let config = {
+            repository: '',
+            token: '',
+            days: 4,
+            state: 'open',
+            saveConfig: true
+        };
+
+        let issues = [];
+        let selectedIssue = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            updateUI();
+            
+            // Close modal when clicking outside
+            document.getElementById('editModal').addEventListener('click', (e) => {
+                if (e.target.id === 'editModal') {
+                    closeEditModal();
+                }
+            });
+
+            // Load projects when repository changes
+            document.getElementById('repository').addEventListener('change', loadProjects);
+            
+            // Handle project selection
+            document.getElementById('projectSelect').addEventListener('change', (e) => {
+                selectedProjectId = e.target.value;
+                if (selectedProjectId) {
+                    localStorage.setItem('selectedProjectId', selectedProjectId);
+                }
+            });
+        });
+
+        function loadConfig() {
+            const saved = localStorage.getItem('issueViewerConfig');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    config = { ...config, ...parsed };
+                    document.getElementById('repository').value = config.repository || '';
+                    document.getElementById('token').value = config.token || '';
+                    document.getElementById('days').value = config.days || 4;
+                    document.getElementById('state').value = config.state || 'open';
+                    document.getElementById('saveConfig').checked = config.saveConfig !== false;
+                    
+                    // Load projects if repository is set
+                    if (config.repository && config.token) {
+                        loadProjects();
+                    }
+                } catch (e) {
+                    console.error('Failed to load config:', e);
+                }
+            }
+        }
+
+        async function loadProjects() {
+            const repository = document.getElementById('repository').value.trim();
+            const token = document.getElementById('token').value.trim();
+            
+            if (!repository || !token) {
+                document.getElementById('projectSelect').innerHTML = '<option value="">Enter repository and token first</option>';
+                return;
+            }
+
+            const [owner, repo] = repository.split('/');
+            if (!owner || !repo) {
+                document.getElementById('projectSelect').innerHTML = '<option value="">Invalid repository format</option>';
+                return;
+            }
+
+            try {
+                document.getElementById('projectSelect').innerHTML = '<option value="">Loading projects...</option>';
+
+                // Fetch organization/repository projects using GraphQL
+                const query = `
+                    query($owner: String!, $repo: String!) {
+                        repository(owner: $owner, name: $repo) {
+                            projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                                nodes {
+                                    id
+                                    title
+                                    closed
+                                }
+                            }
+                        }
+                        organization(login: $owner) {
+                            projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                                nodes {
+                                    id
+                                    title
+                                    closed
+                                }
+                            }
+                        }
+                    }
+                `;
+
+                const response = await fetch('https://api.github.com/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query, variables: { owner, repo } })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch projects: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.errors) {
+                    console.error('GraphQL errors:', data.errors);
+                    throw new Error('Failed to fetch projects');
+                }
+
+                // Combine repository and organization projects
+                const repoProjects = data.data?.repository?.projectsV2?.nodes || [];
+                const orgProjects = data.data?.organization?.projectsV2?.nodes || [];
+                
+                // Deduplicate by project ID
+                const projectMap = new Map();
+                [...repoProjects, ...orgProjects].forEach(project => {
+                    if (!projectMap.has(project.id)) {
+                        projectMap.set(project.id, project);
+                    }
+                });
+                availableProjects = Array.from(projectMap.values());
+
+                // Filter for open projects
+                const openProjects = availableProjects.filter(p => !p.closed);
+
+                const projectSelect = document.getElementById('projectSelect');
+                
+                if (openProjects.length === 0) {
+                    projectSelect.innerHTML = '<option value="">No open projects found</option>';
+                    selectedProjectId = null;
+                    return;
+                }
+
+                // Populate dropdown
+                projectSelect.innerHTML = openProjects.map((project, index) => 
+                    `<option value="${project.id}">${escapeHtml(project.title)}</option>`
+                ).join('');
+
+                // Load saved project or select first one
+                const savedProjectId = localStorage.getItem('selectedProjectId');
+                if (savedProjectId && openProjects.find(p => p.id === savedProjectId)) {
+                    projectSelect.value = savedProjectId;
+                    selectedProjectId = savedProjectId;
+                } else {
+                    selectedProjectId = openProjects[0].id;
+                    projectSelect.value = selectedProjectId;
+                }
+
+            } catch (error) {
+                console.error('Failed to load projects:', error);
+                document.getElementById('projectSelect').innerHTML = '<option value="">Failed to load projects</option>';
+                selectedProjectId = null;
+            }
+        }
+
+        function saveConfig() {
+            if (document.getElementById('saveConfig').checked) {
+                localStorage.setItem('issueViewerConfig', JSON.stringify(config));
+            }
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('configPanel');
+            const btn = document.getElementById('toggleBtn');
+            panel.classList.toggle('collapsed');
+            btn.textContent = panel.classList.contains('collapsed') ? '▶' : '▼';
+        }
+
+        function setStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.innerHTML = message;
+            statusEl.className = 'status-message';
+            if (type === 'error') statusEl.classList.add('error');
+            if (type === 'success') statusEl.classList.add('success');
+        }
+
+        function setLoading(isLoading) {
+            const btn = document.getElementById('fetchBtn');
+            btn.disabled = isLoading;
+            if (isLoading) {
+                setStatus('<div class="spinner"></div> Fetching issues...');
+            }
+        }
+
+        async function fetchIssues() {
+            // Get config from form
+            config.repository = document.getElementById('repository').value.trim();
+            config.token = document.getElementById('token').value.trim();
+            config.days = parseInt(document.getElementById('days').value) || 4;
+            config.state = document.getElementById('state').value || 'open';
+            config.saveConfig = document.getElementById('saveConfig').checked;
+
+            if (!config.repository) {
+                setStatus('Please enter a repository', 'error');
+                return;
+            }
+
+            if (!config.repository.includes('/')) {
+                setStatus('Repository must be in format: owner/repo', 'error');
+                return;
+            }
+
+            saveConfig();
+            setLoading(true);
+
+            try {
+                const [owner, repo] = config.repository.split('/');
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - config.days);
+                const since = cutoffDate.toISOString();
+
+                // Fetch issues updated since cutoff
+                const updatedIssues = await fetchFromGitHub(
+                    `https://api.github.com/repos/${owner}/${repo}/issues`,
+                    { since, state: config.state, sort: 'updated', direction: 'desc', per_page: 100 }
+                );
+
+                // Fetch recently created issues
+                const createdIssues = await fetchFromGitHub(
+                    `https://api.github.com/repos/${owner}/${repo}/issues`,
+                    { state: config.state, sort: 'created', direction: 'desc', per_page: 100 }
+                );
+
+                // Filter created issues by date
+                const recentlyCreated = createdIssues.filter(issue => 
+                    new Date(issue.created_at) >= cutoffDate
+                );
+
+                // Merge and deduplicate
+                const issueMap = new Map();
+                [...updatedIssues, ...recentlyCreated].forEach(issue => {
+                    if (!issue.pull_request) { // Exclude pull requests
+                        issueMap.set(issue.number, issue);
+                    }
+                });
+
+                issues = Array.from(issueMap.values());
+
+                // Fetch comments for issues that were updated but not recently created
+                for (const issue of issues) {
+                    if (new Date(issue.created_at) < cutoffDate && new Date(issue.updated_at) >= cutoffDate) {
+                        try {
+                            const comments = await fetchFromGitHub(
+                                `https://api.github.com/repos/${owner}/${repo}/issues/${issue.number}/comments`,
+                                { since, per_page: 100 }
+                            );
+                            issue.recentComments = comments;
+                        } catch (e) {
+                            console.error(`Failed to fetch comments for issue ${issue.number}:`, e);
+                            issue.recentComments = [];
+                        }
+                    } else {
+                        issue.recentComments = [];
+                    }
+                }
+
+                // Sort by most recent activity
+                issues.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+
+                renderIssueList();
+                const stateText = config.state === 'all' ? 'all' : config.state;
+                setStatus(`Found ${issues.length} ${stateText} issue(s) in the last ${config.days} day(s)`, 'success');
+                setLoading(false);
+
+            } catch (error) {
+                console.error('Error fetching issues:', error);
+                setStatus(`Error: ${error.message}`, 'error');
+                setLoading(false);
+            }
+        }
+
+        async function fetchFromGitHub(url, params = {}) {
+            const queryString = new URLSearchParams(params).toString();
+            const fullUrl = queryString ? `${url}?${queryString}` : url;
+
+            const headers = {
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            };
+
+            if (config.token) {
+                headers['Authorization'] = `Bearer ${config.token}`;
+            }
+
+            const response = await fetch(fullUrl, { headers });
+
+            // Update rate limit display
+            const remaining = response.headers.get('X-RateLimit-Remaining');
+            const limit = response.headers.get('X-RateLimit-Limit');
+            if (remaining && limit) {
+                document.getElementById('rateLimit').textContent = `Rate limit: ${remaining}/${limit}`;
+            }
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('Repository not found. Check the repository name and your access.');
+                } else if (response.status === 401) {
+                    throw new Error('Authentication failed. Check your token.');
+                } else if (response.status === 403) {
+                    const resetTime = response.headers.get('X-RateLimit-Reset');
+                    if (resetTime) {
+                        const resetDate = new Date(parseInt(resetTime) * 1000);
+                        throw new Error(`Rate limit exceeded. Resets at ${resetDate.toLocaleTimeString()}`);
+                    }
+                    throw new Error('Rate limit exceeded or access forbidden.');
+                }
+                throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+            }
+
+            return await response.json();
+        }
+
+        function renderIssueList() {
+            const container = document.getElementById('issueListContent');
+            const header = document.getElementById('issueListHeader');
+
+            if (issues.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No issues found</h3>
+                        <p>No issues were created or updated in the last ${config.days} day(s)</p>
+                    </div>
+                `;
+                header.textContent = 'Issues';
+                return;
+            }
+
+            header.textContent = `Issues (${issues.length})`;
+
+            container.innerHTML = issues.map(issue => {
+                const createdDate = new Date(issue.created_at);
+                const updatedDate = new Date(issue.updated_at);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - config.days);
+
+                const isNew = createdDate >= cutoffDate;
+                const hasRecentComments = issue.recentComments && issue.recentComments.length > 0;
+
+                const labels = issue.labels.map(label => 
+                    `<span class="label" style="background-color: #${label.color}; color: ${getContrastColor(label.color)}">${label.name}</span>`
+                ).join('');
+
+                return `
+                    <div class="issue-item" onclick="selectIssue(${issue.number})">
+                        <div class="issue-number">#${issue.number}</div>
+                        <div class="issue-title">${escapeHtml(issue.title)}</div>
+                        <div class="issue-meta">
+                            <span class="badge ${issue.state === 'open' ? 'badge-open' : 'badge-closed'}">
+                                ${issue.state}
+                            </span>
+                            ${isNew ? '<span>🆕 Created ' + formatRelativeTime(createdDate) + '</span>' : ''}
+                            ${!isNew ? '<span>Updated ' + formatRelativeTime(updatedDate) + '</span>' : ''}
+                            ${hasRecentComments ? '<span>💬 ' + issue.recentComments.length + ' new</span>' : ''}
+                            ${issue.comments > 0 ? '<span>💬 ' + issue.comments + ' total</span>' : ''}
+                        </div>
+                        ${labels ? '<div style="margin-top: 5px;">' + labels + '</div>' : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function selectIssue(issueNumber) {
+            const issue = issues.find(i => i.number === issueNumber);
+            if (!issue) return;
+
+            selectedIssue = issue;
+
+            // Update selected state in list
+            document.querySelectorAll('.issue-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+
+            // Fetch all comments if not already loaded
+            if (!issue.allComments) {
+                try {
+                    const [owner, repo] = config.repository.split('/');
+                    issue.allComments = await fetchFromGitHub(
+                        `https://api.github.com/repos/${owner}/${repo}/issues/${issue.number}/comments`,
+                        { per_page: 100 }
+                    );
+                } catch (e) {
+                    console.error('Failed to fetch all comments:', e);
+                    issue.allComments = [];
+                }
+            }
+
+            renderIssueDetails(issue);
+        }
+
+        function renderIssueDetails(issue) {
+            const container = document.getElementById('issueDetailsContent');
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - config.days);
+
+            const labels = issue.labels.map(label => 
+                `<span class="label" style="background-color: #${label.color}; color: ${getContrastColor(label.color)}">${label.name}</span>`
+            ).join('');
+
+            const commentsHtml = issue.allComments && issue.allComments.length > 0 ? `
+                <div class="comments-section">
+                    <div class="comments-header">Comments (${issue.allComments.length})</div>
+                    ${issue.allComments.map(comment => {
+                        const commentDate = new Date(comment.created_at);
+                        const isRecent = commentDate >= cutoffDate;
+                        return `
+                            <div class="comment ${isRecent ? 'recent' : ''}">
+                                <div class="comment-header">
+                                    <span class="comment-author">${escapeHtml(comment.user.login)}</span>
+                                    commented ${formatRelativeTime(commentDate)}
+                                    ${isRecent ? ' <strong>(NEW)</strong>' : ''}
+                                </div>
+                                <div class="comment-body">${formatMarkdown(comment.body)}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            ` : '';
+
+            container.innerHTML = `
+                <div class="issue-header">
+                    <h2>#${issue.number}: ${escapeHtml(issue.title)}</h2>
+                    <div class="issue-header-meta">
+                        <span class="badge ${issue.state === 'open' ? 'badge-open' : 'badge-closed'}">
+                            ${issue.state}
+                        </span>
+                        <span>Created by <strong>${escapeHtml(issue.user.login)}</strong></span>
+                        <span>Created ${formatRelativeTime(new Date(issue.created_at))}</span>
+                        <span>Updated ${formatRelativeTime(new Date(issue.updated_at))}</span>
+                    </div>
+                    ${labels ? '<div style="margin-top: 10px;">' + labels + '</div>' : ''}
+                </div>
+                <div class="issue-body">
+                    ${formatMarkdown(issue.body || '*No description provided*')}
+                </div>
+                ${commentsHtml}
+                <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                    <button class="github-link" onclick="loadGitHubPage('${issue.html_url}')">
+                        📋 Copy GitHub URL
+                    </button>
+                    <button class="github-link" onclick="window.open('${issue.html_url}', '_blank')" style="background: #6e7781;">
+                        🔗 Open in New Tab
+                    </button>
+                    <button class="btn btn-edit" onclick="openEditModal(${issue.number})">
+                        ✏️ Edit Issue
+                    </button>
+                </div>
+            `;
+        }
+
+        function formatMarkdown(text) {
+            if (!text) return '';
+            
+            // Basic markdown formatting
+            let html = escapeHtml(text);
+            
+            // Code blocks
+            html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+            
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // Bold
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            
+            // Italic
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            
+            // Links
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+            
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+            
+            return html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatRelativeTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+            if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            return 'just now';
+        }
+
+        function getContrastColor(hexColor) {
+            // Convert hex to RGB
+            const r = parseInt(hexColor.substr(0, 2), 16);
+            const g = parseInt(hexColor.substr(2, 2), 16);
+            const b = parseInt(hexColor.substr(4, 2), 16);
+            
+            // Calculate luminance
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            
+            return luminance > 0.5 ? '#000' : '#fff';
+        }
+
+        function loadGitHubPage(url) {
+            // Copy URL to clipboard and show notification
+            navigator.clipboard.writeText(url).then(() => {
+                alert('GitHub URL copied to clipboard!\n\n' + url + '\n\nYou can paste it in your browser address bar to view the issue.');
+            }).catch(() => {
+                // Fallback if clipboard API fails
+                prompt('Copy this URL to view on GitHub:', url);
+            });
+        }
+
+        let editingIssue = null;
+        let repositoryLabels = [];
+        let selectedLabels = new Set();
+        let projectFields = {};
+        let projectItemId = null;
+        let availableProjects = [];
+        let selectedProjectId = null;
+
+        async function openEditModal(issueNumber) {
+            const issue = issues.find(i => i.number === issueNumber);
+            if (!issue) return;
+
+            editingIssue = issue;
+            selectedLabels = new Set(issue.labels.map(l => l.name));
+
+            // Load repository labels
+            await loadRepositoryLabels();
+
+            // Populate label selector
+            renderLabelSelector();
+
+            // Clear comment field
+            document.getElementById('commentText').value = '';
+
+            // Show modal
+            document.getElementById('editModal').classList.add('show');
+
+            // Auto-load project fields if project is selected
+            if (selectedProjectId) {
+                // Show loading state
+                document.getElementById('projectFieldsContainer').style.display = 'block';
+                document.getElementById('projectFieldsContainer').innerHTML = '<div style="color: #57606a; font-size: 13px; padding: 10px;">Loading project fields...</div>';
+                
+                await autoLoadProjectFields();
+            } else {
+                // Hide project fields if no project selected
+                document.getElementById('projectFieldsContainer').style.display = 'none';
+            }
+        }
+
+        async function autoLoadProjectFields() {
+            if (!selectedProjectId || !editingIssue) return;
+
+            try {
+                const [owner, repo] = config.repository.split('/');
+
+                // Get project item ID
+                projectItemId = await getProjectItemId(owner, repo, editingIssue.number, selectedProjectId);
+
+                // Fetch project fields and current values
+                const projectData = await fetchProjectFields(selectedProjectId, projectItemId);
+                projectFields = projectData;
+
+                // Restore the container structure
+                document.getElementById('projectFieldsContainer').innerHTML = `
+                    <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px;">Iteration</label>
+                    <select id="iterationSelect" class="modal-select">
+                        <option value="">-- No change --</option>
+                    </select>
+                    
+                    <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px; margin-top: 15px;">Stable Iteration</label>
+                    <select id="stableIterationSelect" class="modal-select">
+                        <option value="">-- No change --</option>
+                    </select>
+                    
+                    <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px; margin-top: 15px;">Product Iteration</label>
+                    <select id="productIterationSelect" class="modal-select">
+                        <option value="">-- No change --</option>
+                    </select>
+                    
+                    <label style="font-size: 13px; color: #57606a; display: block; margin-bottom: 5px; margin-top: 15px;">Status</label>
+                    <select id="statusSelect" class="modal-select">
+                        <option value="">-- No change --</option>
+                    </select>
+                `;
+
+                // Populate dropdowns
+                populateProjectFieldDropdowns(projectData);
+
+            } catch (error) {
+                console.error('Failed to auto-load project fields:', error);
+                document.getElementById('projectFieldsContainer').innerHTML = `
+                    <div style="color: #f85149; font-size: 13px; padding: 10px;">
+                        Failed to load project fields. Issue may not be linked to the selected project.
+                    </div>
+                `;
+            }
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+            editingIssue = null;
+            selectedLabels.clear();
+        }
+
+        async function loadRepositoryLabels() {
+            try {
+                const [owner, repo] = config.repository.split('/');
+                repositoryLabels = await fetchFromGitHub(
+                    `https://api.github.com/repos/${owner}/${repo}/labels`,
+                    { per_page: 100 }
+                );
+            } catch (error) {
+                console.error('Failed to load labels:', error);
+                repositoryLabels = [];
+            }
+        }
+
+        function renderLabelSelector() {
+            const container = document.getElementById('labelSelector');
+            
+            if (repositoryLabels.length === 0) {
+                container.innerHTML = '<div style="color: #57606a; font-size: 13px;">No labels available</div>';
+                return;
+            }
+
+            container.innerHTML = repositoryLabels.map(label => {
+                const isSelected = selectedLabels.has(label.name);
+                return `
+                    <div class="label-option ${isSelected ? 'selected' : ''}" 
+                         style="background-color: #${label.color}; color: ${getContrastColor(label.color)}"
+                         onclick="toggleLabel('${escapeHtml(label.name)}')">
+                        ${escapeHtml(label.name)}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleLabel(labelName) {
+            if (selectedLabels.has(labelName)) {
+                selectedLabels.delete(labelName);
+            } else {
+                selectedLabels.add(labelName);
+            }
+            renderLabelSelector();
+        }
+
+        function populateProjectFieldDropdowns(projectData) {
+            // Populate Iteration
+            const iterationSelect = document.getElementById('iterationSelect');
+            iterationSelect.innerHTML = '<option value="">-- No change --</option>';
+            if (projectData.iteration) {
+                projectData.iteration.options.forEach(opt => {
+                    const selected = projectData.iteration.currentValue === opt.id ? 'selected' : '';
+                    iterationSelect.innerHTML += `<option value="${opt.id}" ${selected}>${escapeHtml(opt.title)}</option>`;
+                });
+            }
+
+            // Populate Stable Iteration
+            const stableIterationSelect = document.getElementById('stableIterationSelect');
+            stableIterationSelect.innerHTML = '<option value="">-- No change --</option>';
+            if (projectData.stableIteration) {
+                projectData.stableIteration.options.forEach(opt => {
+                    const selected = projectData.stableIteration.currentValue === opt.id ? 'selected' : '';
+                    stableIterationSelect.innerHTML += `<option value="${opt.id}" ${selected}>${escapeHtml(opt.title)}</option>`;
+                });
+            }
+
+            // Populate Product Iteration
+            const productIterationSelect = document.getElementById('productIterationSelect');
+            productIterationSelect.innerHTML = '<option value="">-- No change --</option>';
+            if (projectData.productIteration) {
+                projectData.productIteration.options.forEach(opt => {
+                    const selected = projectData.productIteration.currentValue === opt.id ? 'selected' : '';
+                    productIterationSelect.innerHTML += `<option value="${opt.id}" ${selected}>${escapeHtml(opt.title)}</option>`;
+                });
+            }
+
+            // Populate Status
+            const statusSelect = document.getElementById('statusSelect');
+            statusSelect.innerHTML = '<option value="">-- No change --</option>';
+            if (projectData.status) {
+                projectData.status.options.forEach(opt => {
+                    const selected = projectData.status.currentValue === opt.id ? 'selected' : '';
+                    statusSelect.innerHTML += `<option value="${opt.id}" ${selected}>${escapeHtml(opt.name)}</option>`;
+                });
+            }
+        }
+
+        async function saveIssueChanges() {
+            if (!editingIssue) return;
+
+            const saveBtn = event.target;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            try {
+                const [owner, repo] = config.repository.split('/');
+
+                // Update labels
+                await updateIssueLabels(owner, repo, editingIssue.number, Array.from(selectedLabels));
+
+                // Add comment if provided
+                const commentText = document.getElementById('commentText').value.trim();
+                if (commentText) {
+                    await addIssueComment(owner, repo, editingIssue.number, commentText);
+                }
+
+                // Update project fields if loaded
+                if (selectedProjectId && projectItemId) {
+                    const updates = [];
+
+                    // Iteration
+                    const iterationValue = document.getElementById('iterationSelect').value;
+                    if (iterationValue && projectFields.iteration) {
+                        updates.push(updateProjectField(selectedProjectId, projectItemId, projectFields.iteration.fieldId, { iterationId: iterationValue }));
+                    }
+
+                    // Stable Iteration
+                    const stableIterationValue = document.getElementById('stableIterationSelect').value;
+                    if (stableIterationValue && projectFields.stableIteration) {
+                        updates.push(updateProjectField(selectedProjectId, projectItemId, projectFields.stableIteration.fieldId, { iterationId: stableIterationValue }));
+                    }
+
+                    // Product Iteration
+                    const productIterationValue = document.getElementById('productIterationSelect').value;
+                    if (productIterationValue && projectFields.productIteration) {
+                        updates.push(updateProjectField(selectedProjectId, projectItemId, projectFields.productIteration.fieldId, { iterationId: productIterationValue }));
+                    }
+
+                    // Status
+                    const statusValue = document.getElementById('statusSelect').value;
+                    if (statusValue && projectFields.status) {
+                        updates.push(updateProjectField(selectedProjectId, projectItemId, projectFields.status.fieldId, { singleSelectOptionId: statusValue }));
+                    }
+
+                    await Promise.all(updates);
+                }
+
+                // Refresh the issue
+                await refreshIssue(editingIssue.number);
+
+                alert('Issue updated successfully!');
+                closeEditModal();
+
+            } catch (error) {
+                console.error('Failed to save changes:', error);
+                alert(`Failed to save changes: ${error.message}`);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+            }
+        }
+
+        async function updateIssueLabels(owner, repo, issueNumber, labels) {
+            const response = await fetch(
+                `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${config.token}`,
+                        'X-GitHub-Api-Version': '2022-11-28',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ labels })
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Failed to update labels: ${response.status} ${response.statusText}`);
+            }
+
+            return await response.json();
+        }
+
+        async function addIssueComment(owner, repo, issueNumber, body) {
+            const response = await fetch(
+                `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${config.token}`,
+                        'X-GitHub-Api-Version': '2022-11-28',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ body })
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Failed to add comment: ${response.status} ${response.statusText}`);
+            }
+
+            return await response.json();
+        }
+
+        async function fetchProjectFields(projectId, itemId) {
+            const query = `
+                query($projectId: ID!, $itemId: ID!) {
+                    project: node(id: $projectId) {
+                        ... on ProjectV2 {
+                            fields(first: 50) {
+                                nodes {
+                                    ... on ProjectV2Field {
+                                        id
+                                        name
+                                    }
+                                    ... on ProjectV2IterationField {
+                                        id
+                                        name
+                                        configuration {
+                                            iterations {
+                                                id
+                                                title
+                                                startDate
+                                            }
+                                        }
+                                    }
+                                    ... on ProjectV2SingleSelectField {
+                                        id
+                                        name
+                                        options {
+                                            id
+                                            name
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item: node(id: $itemId) {
+                        ... on ProjectV2Item {
+                            fieldValues(first: 50) {
+                                nodes {
+                                    ... on ProjectV2ItemFieldIterationValue {
+                                        field {
+                                            ... on ProjectV2IterationField {
+                                                id
+                                                name
+                                            }
+                                        }
+                                        iterationId
+                                    }
+                                    ... on ProjectV2ItemFieldSingleSelectValue {
+                                        field {
+                                            ... on ProjectV2SingleSelectField {
+                                                id
+                                                name
+                                            }
+                                        }
+                                        optionId
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const response = await fetch('https://api.github.com/graphql', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${config.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query,
+                    variables: { projectId, itemId }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`GraphQL query failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.errors) {
+                throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+            }
+
+            // Parse fields and current values
+            const fields = data.data.project.fields.nodes;
+            const currentValues = data.data.item.fieldValues?.nodes || [];
+
+            const result = {};
+
+            // Find iteration fields
+            const iterationField = fields.find(f => f.name === 'Iteration' && f.configuration);
+            if (iterationField) {
+                const currentValue = currentValues.find(v => v.field?.id === iterationField.id);
+                result.iteration = {
+                    fieldId: iterationField.id,
+                    options: iterationField.configuration.iterations,
+                    currentValue: currentValue?.iterationId
+                };
+            }
+
+            const stableIterationField = fields.find(f => f.name === 'Stable Iteration' && f.configuration);
+            if (stableIterationField) {
+                const currentValue = currentValues.find(v => v.field?.id === stableIterationField.id);
+                result.stableIteration = {
+                    fieldId: stableIterationField.id,
+                    options: stableIterationField.configuration.iterations,
+                    currentValue: currentValue?.iterationId
+                };
+            }
+
+            const productIterationField = fields.find(f => f.name === 'Product Iteration' && f.configuration);
+            if (productIterationField) {
+                const currentValue = currentValues.find(v => v.field?.id === productIterationField.id);
+                result.productIteration = {
+                    fieldId: productIterationField.id,
+                    options: productIterationField.configuration.iterations,
+                    currentValue: currentValue?.iterationId
+                };
+            }
+
+            // Find status field
+            const statusField = fields.find(f => f.name === 'Status' && f.options);
+            if (statusField) {
+                const currentValue = currentValues.find(v => v.field?.id === statusField.id);
+                result.status = {
+                    fieldId: statusField.id,
+                    options: statusField.options,
+                    currentValue: currentValue?.optionId
+                };
+            }
+
+            return result;
+        }
+
+        async function getProjectItemId(owner, repo, issueNumber, projectId) {
+            // GraphQL query to get project item ID for an issue
+            // Query both repository and organization project items
+            const query = `
+                query($owner: String!, $repo: String!, $issueNumber: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                        issue(number: $issueNumber) {
+                            projectItems(first: 50) {
+                                nodes {
+                                    id
+                                    project {
+                                        id
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const response = await fetch('https://api.github.com/graphql', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${config.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query,
+                    variables: { owner, repo, issueNumber }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`GraphQL query failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.errors) {
+                console.error('GraphQL errors:', data.errors);
+                throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+            }
+
+            const projectItems = data.data?.repository?.issue?.projectItems?.nodes || [];
+            
+            if (projectItems.length === 0) {
+                throw new Error('Issue is not linked to any project');
+            }
+
+            // Find the item for the selected project
+            const item = projectItems.find(item => item.project.id === projectId);
+            
+            if (!item) {
+                // Log available projects for debugging
+                console.log('Available project IDs for this issue:', projectItems.map(p => p.project.id));
+                console.log('Looking for project ID:', projectId);
+                throw new Error(`Issue is not linked to the selected project. Issue is linked to ${projectItems.length} project(s).`);
+            }
+
+            return item.id;
+        }
+
+        async function updateProjectField(projectId, itemId, fieldId, value) {
+            const mutation = `
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                    updateProjectV2ItemFieldValue(
+                        input: {
+                            projectId: $projectId
+                            itemId: $itemId
+                            fieldId: $fieldId
+                            value: $value
+                        }
+                    ) {
+                        projectV2Item {
+                            id
+                        }
+                    }
+                }
+            `;
+
+            const response = await fetch('https://api.github.com/graphql', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${config.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: mutation,
+                    variables: { projectId, itemId, fieldId, value }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`GraphQL mutation failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.errors) {
+                throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+            }
+
+            return data;
+        }
+
+        async function refreshIssue(issueNumber) {
+            try {
+                const [owner, repo] = config.repository.split('/');
+                const updatedIssue = await fetchFromGitHub(
+                    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`
+                );
+
+                // Update in issues array
+                const index = issues.findIndex(i => i.number === issueNumber);
+                if (index !== -1) {
+                    issues[index] = { ...issues[index], ...updatedIssue };
+                    renderIssueList();
+                    if (selectedIssue && selectedIssue.number === issueNumber) {
+                        selectedIssue = issues[index];
+                        renderIssueDetails(selectedIssue);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to refresh issue:', error);
+            }
+        }
+
+        function updateUI() {
+            // Any additional UI updates on load
+        }
+    </script>
+</body>
+</html>
