@@ -1,0 +1,70 @@
+name: "Check Hidden Files"
+description: "Checks that a pull request does not add or modify hidden files or directories that are not explicitly allowed"
+
+inputs:
+  allowed-paths:
+    description: "Comma-separated list of additional hidden file or directory names to allow, e.g. '.run, .packit.yaml'"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Check changed files for unexpected hidden paths
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        EXTRA_ALLOWED: ${{ inputs.allowed-paths }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
+          echo "::error::This action can only be used with pull_request events."
+          exit 1
+        fi
+
+        # Hidden files and directories that legitimately appear in Debezium repositories;
+        # anything else that begins with a dot, at any depth, is rejected.
+        allowed=(".github" ".gitignore" ".gitattributes" ".gitmodules" ".mvn" ".dockerignore")
+        IFS=',' read -ra extras <<< "$EXTRA_ALLOWED"
+        for extra in "${extras[@]}"; do
+          extra="$(echo "$extra" | xargs)"
+          if [[ -n "$extra" ]]; then
+            allowed+=("$extra")
+          fi
+        done
+
+        git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+
+        violations=()
+        while IFS= read -r file; do
+          IFS='/' read -ra segments <<< "$file"
+          for segment in "${segments[@]}"; do
+            if [[ "$segment" == .* ]]; then
+              permitted=false
+              for allow in "${allowed[@]}"; do
+                if [[ "$segment" == "$allow" ]]; then
+                  permitted=true
+                  break
+                fi
+              done
+              if [[ "$permitted" == "false" ]]; then
+                violations+=("$file")
+                break
+              fi
+            fi
+          done
+        done < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA")
+
+        if [[ ${#violations[@]} -gt 0 ]]; then
+          echo "::error::Pull request contains hidden files or directories that are not permitted:"
+          printf '%s\n' "${violations[@]}"
+          echo "If a path is legitimate, add its hidden segment to the allowed-paths input of the check-hidden-files action."
+          exit 1
+        fi
+
+        echo "No unexpected hidden files or directories found."

@@ -24,6 +24,25 @@ Debezium defines several top-level workflows, but there are two that define the 
 The workflow `debezium-workflow-pr.yml` defines the behavior to execute when a pull request is opened.
 This top-level workflow is designed to use as many runners that are available for the organization. 
 
+#### Safety checks
+
+This repository hosts composite actions that all Debezium repositories reuse in their pull request workflows, referenced as `debezium/dbz/.github/actions/<name>@main`:
+
+* `check-dco` verifies that all commits carry a Developer Certificate of Origin sign-off.
+* `check-hidden-files` rejects pull requests that add or modify hidden files or directories, at any depth, unless the hidden path segment is on the allow list.
+  The built-in allow list covers `.github`, `.gitignore`, `.gitattributes`, `.gitmodules`, `.mvn`, and `.dockerignore`; repositories that track other hidden paths pass them through the `allowed-paths` input, e.g. `allowed-paths: ".run, .packit.yaml"`.
+* `check-unicode-safety` scans the files changed by a pull request for adversarial Unicode patterns such as bidirectional overrides, invisible characters, and homoglyphs.
+
+The `check-hidden-files` and `check-unicode-safety` actions perform their own checkout, so a consuming job needs no other steps:
+
+```yaml
+  check-hidden-files:
+    name: "Check for hidden files"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: debezium/dbz/.github/actions/check-hidden-files@main
+```
+
 ### Pushes
 
 The workflow `debezium-workflow-push.yml` defines the behavior to execute when a commit is pushed to the repository.

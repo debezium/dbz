@@ -1,0 +1,23 @@
+name: "Check Unicode Safety"
+description: "Checks the files changed by a pull request for malicious or adversarial Unicode patterns such as bidirectional overrides, invisible characters, and homoglyphs"
+
+inputs:
+  exclude-patterns:
+    description: "Newline-separated path patterns to exclude from scanning"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Unicode safety check
+      # Pinned by commit SHA rather than tag as an unverified third-party action
+      uses: dcondrey/unicode-safety-check@0ee6d0bec92c640765f97a0514a9cf1613a34162 # v3.0.0
+      with:
+        scan-mode: "changed"
+        exclude-patterns: ${{ inputs.exclude-patterns }}
