@@ -60,3 +60,10 @@ _You might be asked later to provide [DEBUG/TRACE](https://debezium.io/documenta
 **How to reproduce the issue using our [tutorial](https://github.com/debezium/debezium-examples/tree/main/tutorial) deployment?**
 
 `<Your answer>`
+
+---
+
+** Are you willing to submit a PR? **
+_This is definitely not required, but we are happy to guide you in the contribution process and if needed also help with implementing the PR itself._
+
+[] Yes I am willing to submit a PR!
