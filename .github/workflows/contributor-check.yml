@@ -6,27 +6,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Checkout so that this contributor check passes if the contributor details are part of the pull request
-      # If we don't do this, then we are only
-      - name: Checkout Action
-        uses: actions/checkout@v6
-        with:
-          repository: debezium/debezium
-          ref: main
-          fetch-depth: 0
+      # No checkout: the three files are fetched as raw content from both the base branch and the pull
+      # request head, so that a pull request which adds the missing contributor details passes the check.
       - name: Check if COPYRIGHT.txt has author name?
         id: check
         env:
           pull_request_number: ${{ github.event.pull_request.number }}
-        run: |        
+          github_repository: ${{ github.repository }}
+          pull_request_head_repo: ${{ github.event.pull_request.head.repo.full_name }}
+          pull_request_head_sha: ${{ github.event.pull_request.head.sha }}
+        run: |
+          USER_NOT_FOUND=false
           curl -H 'Accept: application/vnd.github.v3.raw' https://raw.githubusercontent.com/debezium/debezium/main/COPYRIGHT.txt >> COPYRIGHT_MAIN.txt
           curl -H 'Accept: application/vnd.github.v3.raw' https://raw.githubusercontent.com/debezium/debezium/main/jenkins-jobs/scripts/config/Aliases.txt >> ALIASES_MAIN.txt
           curl -H 'Accept: application/vnd.github.v3.raw' https://raw.githubusercontent.com/debezium/debezium/main/jenkins-jobs/scripts/config/FilteredNames.txt >> FILTEREDNAMES_MAIN.txt
-          cat COPYRIGHT.txt COPYRIGHT_MAIN.txt | sort -u > COPYRIGHT_CHECK.txt
-          cat ALIASES_MAIN.txt jenkins-jobs/scripts/config/Aliases.txt | sort -u > ALIASES_CHECK.txt
-          cat FILTEREDNAMES_MAIN.txt jenkins-jobs/scripts/config/FilteredNames.txt | sort -u > FILTEREDNAMES_CHECK.txt
+          # The contributor files only exist in debezium/debezium; only there may a pull request add
+          # the missing details itself, and only there must the pull request head be considered.
+          if [[ "$github_repository" == "debezium/debezium" ]]; then
+            curl --silent --fail -H 'Accept: application/vnd.github.v3.raw' "https://raw.githubusercontent.com/$pull_request_head_repo/$pull_request_head_sha/COPYRIGHT.txt" >> COPYRIGHT_PR.txt || true
+            curl --silent --fail -H 'Accept: application/vnd.github.v3.raw' "https://raw.githubusercontent.com/$pull_request_head_repo/$pull_request_head_sha/jenkins-jobs/scripts/config/Aliases.txt" >> ALIASES_PR.txt || true
+            curl --silent --fail -H 'Accept: application/vnd.github.v3.raw' "https://raw.githubusercontent.com/$pull_request_head_repo/$pull_request_head_sha/jenkins-jobs/scripts/config/FilteredNames.txt" >> FILTEREDNAMES_PR.txt || true
+          fi
+          touch COPYRIGHT_PR.txt ALIASES_PR.txt FILTEREDNAMES_PR.txt
+          cat COPYRIGHT_PR.txt COPYRIGHT_MAIN.txt | sort -u > COPYRIGHT_CHECK.txt
+          cat ALIASES_MAIN.txt ALIASES_PR.txt | sort -u > ALIASES_CHECK.txt
+          cat FILTEREDNAMES_MAIN.txt FILTEREDNAMES_PR.txt | sort -u > FILTEREDNAMES_CHECK.txt
 
-          curl --silent -X "GET" https://api.github.com/repos/debezium/debezium/pulls/$pull_request_number/commits | jq '.[] | {author: .commit.author.name}' | jq -r '.author' | uniq >> AUTHOR_NAME.txt
+          curl --silent -X "GET" https://api.github.com/repos/$github_repository/pulls/$pull_request_number/commits | jq '.[] | {author: .commit.author.name}' | jq -r '.author' | uniq >> AUTHOR_NAME.txt
 
           while IFS=" " read -r AUTHOR;
           do
@@ -34,10 +40,13 @@ jobs:
               if ! grep -qi "$AUTHOR" ALIASES_CHECK.txt; then
                 if ! grep -qi "$AUTHOR" FILTEREDNAMES_CHECK.txt; then
                   echo "USER_NOT_FOUND=true"
+                  USER_NOT_FOUND=true
+                  break
                 fi
               fi
             fi
           done < AUTHOR_NAME.txt
+          echo "USER_NOT_FOUND=$USER_NOT_FOUND" >> $GITHUB_OUTPUT
       - name: Record check result
         env:
           pull_request_number: ${{ github.event.pull_request.number }}
@@ -54,7 +63,7 @@ jobs:
           retention-days: 1
       - name: Check failure
         if: ${{ steps.check.outputs.USER_NOT_FOUND == 'true' }}
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         continue-on-error: false
         with:
           script: |
