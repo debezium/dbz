@@ -11,6 +11,7 @@ jobs:
         env:
           pull_request_number: ${{ github.event.pull_request.number }}
           github_repository: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "OCTOCAT_COMMIT_FOUND=false" >> $GITHUB_OUTPUT
 
@@ -26,7 +27,7 @@ jobs:
             fi
 
             while [ $ATTEMPT -le $MAX_RETRIES ]; do
-              RESPONSE=$(curl --silent -w "%{http_code}" -X "GET" $URL)
+              RESPONSE=$(curl --silent -H "Authorization: Bearer $GH_TOKEN" -w "%{http_code}" -X "GET" $URL)
               HTTP_CODE="${RESPONSE: -3}"
               BODY="${RESPONSE:: -3}"
 

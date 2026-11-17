@@ -13,6 +13,7 @@ jobs:
         env:
           pull_request_number: ${{ github.event.pull_request.number }}
           github_repository: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
           pull_request_head_repo: ${{ github.event.pull_request.head.repo.full_name }}
           pull_request_head_sha: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -32,7 +33,7 @@ jobs:
           cat ALIASES_MAIN.txt ALIASES_PR.txt | sort -u > ALIASES_CHECK.txt
           cat FILTEREDNAMES_MAIN.txt FILTEREDNAMES_PR.txt | sort -u > FILTEREDNAMES_CHECK.txt
 
-          curl --silent -X "GET" https://api.github.com/repos/$github_repository/pulls/$pull_request_number/commits | jq '.[] | {author: .commit.author.name}' | jq -r '.author' | uniq >> AUTHOR_NAME.txt
+          curl --silent -H "Authorization: Bearer $GH_TOKEN" -X "GET" https://api.github.com/repos/$github_repository/pulls/$pull_request_number/commits | jq '.[] | {author: .commit.author.name}' | jq -r '.author' | uniq >> AUTHOR_NAME.txt
 
           while IFS=" " read -r AUTHOR;
           do
