@@ -20,7 +20,25 @@ From the input extract:
 - `OLD_VERSION` — e.g. `4.3.0`
 - `NEW_VERSION` — e.g. `4.3.1`
 - `ISSUE_NO` — the numeric issue/PR number (e.g. `2474`) — used as the branch name `dbz#<ISSUE_NO>` and commit prefix `debezium/dbz#<ISSUE_NO>`
-- `DBZ_DIR` — the Debezium image directory inside `container-images/kafka/` to update (the Debezium release stream, e.g. `3.7`). Determine it by reading `container-images/kafka/` and finding the directory whose `Dockerfile` currently pins `OLD_VERSION`. Use `execute_command` with `grep -rl "KAFKA_VERSION=$OLD_VERSION" container-images/kafka/` to find it.
+- `DBZ_DIR` — the Debezium image directory inside `$IMAGES_REPO/kafka/` to update (the Debezium release stream, e.g. `3.7`). Determine it by reading `$IMAGES_REPO/kafka/` and finding the directory whose `Dockerfile` currently pins `OLD_VERSION`. Use `execute_command` with `grep -rl "KAFKA_VERSION=$OLD_VERSION" "$IMAGES_REPO/kafka/"` to find it.
+
+### Locate working directories
+
+The skill must not assume any user-specific paths. Resolve the following variables before doing anything else:
+
+- `WORK_DIR` — scratch/data directory for this skill: `$HOME/skill-data/kafka-version-upgrade`. Create it with `mkdir -p "$WORK_DIR"`. If `$HOME` is not set, ask the user for a base directory instead.
+- `DEBEZIUM_REPO` — local checkout of the `debezium` repository.
+- `IMAGES_REPO` — local checkout of the `container-images` repository.
+
+For the two repositories, **ask the user** whether local checkouts already exist and where. If they do, use those locations. Otherwise clone them into the working directory:
+
+```bash
+mkdir -p "$WORK_DIR" && cd "$WORK_DIR"
+gh repo clone debezium/debezium
+gh repo clone debezium/container-images
+```
+
+and set `DEBEZIUM_REPO="$WORK_DIR/debezium"` and `IMAGES_REPO="$WORK_DIR/container-images"`. For freshly cloned repositories, ask the user for the fork (remote) that should receive the pushes.
 
 Set up these variables for all subsequent steps.
 
@@ -31,8 +49,8 @@ Set up these variables for all subsequent steps.
 Run these commands sequentially:
 
 ```bash
-cd /home/jpechane/sources/debezium/debezium && git checkout -b "dbz#<ISSUE_NO>"
-cd /home/jpechane/sources/debezium/container-images && git checkout -b "dbz#<ISSUE_NO>"
+cd "$DEBEZIUM_REPO" && git checkout -b "dbz#<ISSUE_NO>"
+cd "$IMAGES_REPO" && git checkout -b "dbz#<ISSUE_NO>"
 ```
 
 Confirm both branches were created (exit code 0).
@@ -44,21 +62,21 @@ Confirm both branches were created (exit code 0).
 ### 2a. Download the tarball
 
 ```bash
-curl -fSL -o /tmp/kafka-new.tgz \
+curl -fSL -o "$WORK_DIR/kafka-new.tgz" \
   https://downloads.apache.org/kafka/<NEW_VERSION>/kafka_2.13-<NEW_VERSION>.tgz
 ```
 
 If that fails (mirror not yet propagated) fall back to the archive URL:
 
 ```bash
-curl -fSL -o /tmp/kafka-new.tgz \
+curl -fSL -o "$WORK_DIR/kafka-new.tgz" \
   https://archive.apache.org/dist/kafka/<NEW_VERSION>/kafka_2.13-<NEW_VERSION>.tgz
 ```
 
 ### 2b. Capture SHA512 hash
 
 ```bash
-sha512sum /tmp/kafka-new.tgz
+sha512sum "$WORK_DIR/kafka-new.tgz"
 ```
 
 Record the **uppercase** hex string only (no filename). This is `NEW_SHA512`.
@@ -68,13 +86,13 @@ To uppercase: pipe through `awk '{print toupper($1)}'`.
 ### 2c. Inspect companion library versions inside the tarball
 
 ```bash
-tar -tzf /tmp/kafka-new.tgz \
+tar -tzf "$WORK_DIR/kafka-new.tgz" \
   | grep -E "/(jackson|zstd|netty|slf4j)" \
   | grep '\.jar$' \
   | sort
 ```
 
-Compare the jar filenames against the current property values in `debezium/pom.xml` (lines near `<!-- Kafka and its dependencies MUST reflect what the Kafka version uses -->`):
+Compare the jar filenames against the current property values in `$DEBEZIUM_REPO/pom.xml` (lines near `<!-- Kafka and its dependencies MUST reflect what the Kafka version uses -->`):
 
 | Property | pom.xml key |
 |---|---|
@@ -88,14 +106,14 @@ Note any version differences as `COMPANION_DELTAS`. For a patch Kafka release th
 ### 2d. Clean up
 
 ```bash
-rm /tmp/kafka-new.tgz
+rm "$WORK_DIR/kafka-new.tgz"
 ```
 
 ---
 
 ## Step 3 — Update the `debezium` repository
 
-### 3a. Edit `debezium/pom.xml`
+### 3a. Edit `$DEBEZIUM_REPO/pom.xml`
 
 Use `search_and_replace` or `apply_diff` to change:
 
@@ -109,7 +127,7 @@ Use `search_and_replace` or `apply_diff` to change:
 
 If `COMPANION_DELTAS` is non-empty, apply each companion property change in the same edit.
 
-### 3b. Edit `debezium/documentation/antora.yml`
+### 3b. Edit `$DEBEZIUM_REPO/documentation/antora.yml`
 
 Change:
 
@@ -124,7 +142,7 @@ debezium-kafka-version: 'NEW_VERSION'
 ### 3c. Commit
 
 ```bash
-cd /home/jpechane/sources/debezium/debezium && \
+cd "$DEBEZIUM_REPO" && \
   git add pom.xml documentation/antora.yml && \
   git commit -s -m "debezium/dbz#<ISSUE_NO> Upgrade Kafka to <NEW_VERSION>"
 ```
@@ -138,7 +156,7 @@ The `-s` flag adds a `Signed-off-by` trailer. The commit message prefix **must**
 Run the full assembly build (skipping tests) to confirm Kafka `NEW_VERSION` artifacts resolve from Maven Central / Confluent repos:
 
 ```bash
-cd /home/jpechane/sources/debezium/debezium && \
+cd "$DEBEZIUM_REPO" && \
   ./mvnw -T 3 clean install -DskipTests -DskipITs -Passembly
 ```
 
@@ -151,7 +169,7 @@ This is a long-running command — set a generous timeout (≥ 30 minutes). Watc
 Identify the target file:
 
 ```
-container-images/kafka/<DBZ_DIR>/Dockerfile
+$IMAGES_REPO/kafka/<DBZ_DIR>/Dockerfile
 ```
 
 Apply two changes using `apply_diff` or `search_and_replace`:
@@ -164,7 +182,7 @@ The hash must be the **uppercase** hex string captured in Step 2b, with no space
 ### Commit
 
 ```bash
-cd /home/jpechane/sources/debezium/container-images && \
+cd "$IMAGES_REPO" && \
   git add kafka/<DBZ_DIR>/Dockerfile && \
   git commit -s -m "debezium/dbz#<ISSUE_NO> Upgrade Kafka to <NEW_VERSION>"
 ```
@@ -176,7 +194,7 @@ cd /home/jpechane/sources/debezium/container-images && \
 ### 6a. Build the base image (if not locally present)
 
 ```bash
-cd /home/jpechane/sources/debezium/container-images && \
+cd "$IMAGES_REPO" && \
   DEBEZIUM_DOCKER_REGISTRY_PRIMARY_NAME=debezium docker build -t debezium/base base/
 ```
 
@@ -186,7 +204,7 @@ cd /home/jpechane/sources/debezium/container-images && \
 docker build \
   --build-arg DEBEZIUM_DOCKER_REGISTRY_PRIMARY_NAME=debezium \
   -t debezium/kafka:<DBZ_DIR>-test \
-  /home/jpechane/sources/debezium/container-images/kafka/<DBZ_DIR>/
+  "$IMAGES_REPO/kafka/<DBZ_DIR>/"
 ```
 
 Confirm the build passes the `sha512sum -c` verification step. A hash mismatch means `NEW_SHA512` was wrong — re-run Step 2b carefully. A successful build validates the hash and the download URL.
@@ -213,5 +231,5 @@ Report:
 - Only the Debezium image directory matching `OLD_VERSION` is updated. Other `container-images/kafka/` directories (older Debezium streams) keep their existing versions.
 - The `debezium-bom/pom.xml` uses `${version.kafka}` — no direct edits needed there.
 - The `debezium.github.io` repository is **not** in scope for this skill; website metadata is managed separately when a full Debezium release is cut.
-- Always use `origin` (personal fork) for pushes unless instructed otherwise.
+- Push to the user's personal fork remote (usually `origin` in an existing checkout; for fresh clones use the fork the user provided) unless instructed otherwise.
 - The commit message format **must** be: `debezium/dbz#<ISSUE_NO> <description>` with `-s` (sign-off).
