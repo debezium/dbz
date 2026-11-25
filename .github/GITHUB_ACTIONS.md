@@ -43,6 +43,12 @@ The `check-hidden-files` and `check-unicode-safety` actions perform their own ch
       - uses: debezium/dbz/.github/actions/check-hidden-files@main
 ```
 
+#### Build helpers
+
+* `maven-wrapper-cache` caches the Maven distribution that the Maven wrapper installs under `~/.m2/wrapper`, keyed on the wrapper's `distributionUrl`, and on a cache miss installs it up front with retries.
+  Pull request runs only restore the entry, other runs save it on a miss.
+  It reads `.mvn/wrapper/maven-wrapper.properties` from the workspace by default; jobs that check the project out into a subdirectory pass it through the `project-dir` input, e.g. `project-dir: core`.
+
 ### Pushes
 
 The workflow `debezium-workflow-push.yml` defines the behavior to execute when a commit is pushed to the repository.
